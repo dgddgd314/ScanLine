@@ -51,4 +51,4 @@ if __name__ == "__main__":
     # 테스트 설정: 
     # height를 100px로 넉넉하게 잡아 글자 누락을 방지합니다.
     # 1초에 5번(fps=5)씩, 총 5초 동안 캡처를 진행합니다.
-    start_capture_process(left=100, top=200, width=800, height=100, fps=5, duration=5)
+    capture_process(left=100, top=200, width=800, height=100, fps=5, duration=5)
