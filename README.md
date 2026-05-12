@@ -42,6 +42,31 @@ ScanLine/
 - **Signal & Slot 패턴 도입:** 메인 UI 스레드와 `CaptureThread`를 분리하여 UI 멈춤(Freezing) 현상 완벽 해결.
 - **Windows API 연동 (`SetWindowDisplayAffinity`):** 캡처 시 초록색 UI 그래픽이 글자를 가리는 노이즈 문제를 해결하기 위해, 해당 창을 캡처 대상에서 완전히 제외시킴.
 
+### Phase 3: 통합 제어판(Control Panel) 및 인메모리 파이프라인 설계 (진행 예정)
+단순 이미지 저장을 넘어, 실시간 데이터를 효율적으로 처리하기 위한 대시보드와 데이터 흐름을 설계했습니다.
+
+1. **인메모리 릴레이 (In-Memory Relay):** - 하드디스크 쓰기(Disk I/O) 과정을 생략하고, RAM 상에서 `NumPy` 배열 형태로 데이터를 직접 OCR 엔진에 전달하여 병목 현상 최소화.
+2. **생산자-소비자 큐 (Producer-Consumer Queue):** - 캡처 스레드(생산자)와 OCR 스레드(소비자)를 분리하여 시스템 자원 최적화.
+3. **통합 대시보드 UI:** - PyQt5 기반의 별도 설정 창을 통해 프로그램의 모든 파라미터를 실시간 제어.
+
+## ⚙️ 제어판 상세 명세 (Dashboard Specification)
+
+| 카테고리 | 주요 기능 | 상세 항목 |
+| :--- | :--- | :--- |
+| **오버레이 제어** | 초록색 선 속성 | 좌표(X, Y), 선 너비/높이, UI 투명도 슬라이더, 위치 초기화(Reset) |
+| **스캔 설정** | 캡처 및 OCR | 스캔 시작/정지(Toggle), FPS 조절, OCR 인식 언어(KO/EN) 선택 |
+| **데이터 관리** | 저장 및 로그 | TXT 저장 경로 설정, 디버그 모드(이미지 저장 여부), 실시간 추출 텍스트 미리보기 |
+
+## 🏗️ 시스템 아키텍처 (Next Architecture)
+```text
+[Screen] 
+   ▼ (mss)
+[CaptureThread] -> (Pixel Data) -> [In-Memory Queue]
+                                         ▼
+                                   [OCR Thread] -> (String) -> [TXT File]
+                                         ▼
+                                   [Live Preview UI]
+                                   
 ## 🚧 해결해야 할 기술적 과제 & 다음 단계 (Next Steps)
 
 1. **OCR 엔진 연동 (Tesseract/EasyOCR):** 캡처 스레드에서 생성된 이미지를 OCR 스레드로 넘겨 텍스트를 추출하는 생산자-소비자 패턴(Queue) 파이프라인 구축.
