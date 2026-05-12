@@ -37,21 +37,19 @@ def run_capture_loop(left, top, width, height, fps=5, duration=5, output_dir="sc
     start_time = time.time()
     frame_count = 0
     
-    # 2. mss 객체는 루프 바깥에서 단 한 번만 생성 (리소스 낭비 방지)
     with mss.mss() as sct:
         try:
-            # 3. 메인 루프 실행
             while time.time() - start_time < duration:
                 loop_start = time.time()
                 frame_count += 1
                 
-                # 파일 경로 생성 및 단일 캡처 함수 호출 (기능 위임)
+                # 파일 경로 생성 및 캡처 함수 호출
                 filename = os.path.join(output_dir, f"frame_{frame_count:03d}.png")
                 capture_single_frame(sct, region, filename)
                 
                 print(f"저장 완료: {filename}")
                 
-                # 4. FPS 유지를 위한 시간 보정 대기
+                # FPS 유지를 위한 시간 보정
                 time_to_wait = interval - (time.time() - loop_start)
                 if time_to_wait > 0:
                     time.sleep(time_to_wait)
@@ -63,5 +61,4 @@ def run_capture_loop(left, top, width, height, fps=5, duration=5, output_dir="sc
 
 
 if __name__ == "__main__":
-    # 모듈 단독 실행 시 테스트용 코드
     run_capture_loop(left=100, top=200, width=800, height=100, fps=5, duration=5)

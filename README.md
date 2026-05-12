@@ -25,6 +25,31 @@
 - **터널링(Tunneling) 방지:** 빠른 스크롤 시 글자 누락을 방지하기 위해, 시각적인 '선' 대신 충분한 높이(예: 100px)의 **버퍼 존(Buffer Zone)**을 두고 캡처하도록 설계.
 - 목표 FPS에 맞춰 프레임별로 `scanline_captures` 폴더에 이미지를 분리 저장하는 테스트 완료.
 
+## 📚 코어 모듈 명세 (API Reference)
+현재 `Phase 1`에서 구현된 `capture_engine.py`의 핵심 함수 구조입니다. 단일 책임 원칙(SRP)에 따라 단일 캡처와 반복 제어 로직을 분리하여 구현했습니다.
+
+### 1. `capture_single_frame(sct, region, output_filepath)`
+단일 프레임을 캡처하여 지정된 경로에 이미지 파일로 저장하는 순수 함수입니다. 추후 OCR 파이프라인 연결 시 메모리 기반 이미지 처리로 확장이 용이하도록 설계되었습니다.
+
+* **Parameters:**
+  * `sct` (`mss.mss`): 리소스 낭비를 막고 캡처 속도를 높이기 위해 외부에서 한 번만 생성하여 주입받는 mss 캡처 객체.
+  * `region` (`dict`): 캡처할 화면 영역의 좌표와 크기를 담은 딕셔너리 (예: `{"top": 200, "left": 100, "width": 800, "height": 100}`).
+  * `output_filepath` (`str`): 캡처한 이미지를 저장할 전체 파일 경로.
+* **Returns:**
+  * `str`: 성공적으로 저장된 이미지의 파일 경로(`output_filepath`)를 반환합니다.
+
+### 2. `run_capture_loop(left, top, width, height, fps=5, duration=5, output_dir="scanline_captures")`
+지정된 시간(duration) 및 주기(fps)에 맞춰 캡처 루프를 실행하고, 디렉토리 생성 및 FPS 유지를 위한 동적 딜레이(Delay)를 관리하는 제어 함수입니다.
+
+* **Parameters:**
+  * `left`, `top` (`int`): 캡처 영역의 좌측 상단 기준 화면 절대 좌표(px).
+  * `width`, `height` (`int`): 캡처할 영역의 가로, 세로 크기(px). `height`는 스크롤 터널링 방지를 위해 폰트 크기보다 넉넉하게 설정해야 합니다.
+  * `fps` (`int`, optional): 초당 캡처 프레임 수. (기본값: 5)
+  * `duration` (`int`, optional): 총 캡처 루프 진행 시간(초). (기본값: 5)
+  * `output_dir` (`str`, optional): 결과물 프레임 이미지를 순차적으로 저장할 폴더명. (기본값: `"scanline_captures"`)
+* **Returns:**
+  * `None`: 루프가 정상적으로 종료되거나 사용자에 의해 중단(KeyboardInterrupt)되면 종료되며 별도의 반환값은 없습니다.
+
 ## 🚧 해결해야 할 기술적 과제 & 다음 단계 (Next Steps)
 
 1. **이미지 전처리 (Preprocessing):** 캡처된 이미지를 `OpenCV`로 흑백화/이진화하여 OCR 엔진의 인식률 극대화.
