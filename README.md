@@ -30,6 +30,7 @@ ScanLine/
 ├── ui/
 │   └── ui_overlay.py       # 사용자 조작용 투명 가로선 창
 └── .gitignore              # 캐시 및 테스트 이미지 업로드 방지
+```
 
 ## 🚀 현재 진행 상황
 
@@ -66,7 +67,7 @@ ScanLine/
                                    [OCR Thread] -> (String) -> [TXT File]
                                          ▼
                                    [Live Preview UI]
-                                   
+
 ## 🚧 해결해야 할 기술적 과제 & 다음 단계 (Next Steps)
 
 1. **OCR 엔진 연동 (Tesseract/EasyOCR):** 캡처 스레드에서 생성된 이미지를 OCR 스레드로 넘겨 텍스트를 추출하는 생산자-소비자 패턴(Queue) 파이프라인 구축.
