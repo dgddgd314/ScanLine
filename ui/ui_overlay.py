@@ -1,9 +1,11 @@
+import sys
+import ctypes
 from PyQt5.QtWidgets import QWidget
 from PyQt5.QtCore import Qt, QPoint, pyqtSignal
 from PyQt5.QtGui import QPainter, QColor, QPen
 
 class ScanLineUI(QWidget):
-    # 커스텀 시그널: 창의 좌표나 크기가 변할 때 발생
+    # 좌표 변경 시 캡처 엔진에 알릴 시그널
     region_changed = pyqtSignal(int, int, int, int)
 
     def __init__(self):
@@ -12,17 +14,23 @@ class ScanLineUI(QWidget):
         self.dragging = False
         self.resizing_left = False
         self.resizing_right = False
-        self.drag_position = QPoint()
+        self.drag_position = QPoint() # 클릭 시점의 상대 좌표 저장용
 
         self.initUI()
 
     def initUI(self):
+        # 1. 윈도우 속성: 항상 위, 테두리 없음, 툴팁 형태(작업표시줄 제외)
         self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setMouseTracking(True)
         self.setGeometry(100, 200, 800, 100)
 
-    # --- UI 이벤트 발생 시 Signal 발송 ---
+        # 2. Windows API: 캡처 대상에서 이 창을 제외 (유령 모드)
+        if sys.platform == 'win32':
+            hwnd = int(self.winId())
+            # WDA_EXCLUDEFROMCAPTURE = 0x00000011
+            ctypes.windll.user32.SetWindowDisplayAffinity(hwnd, 0x00000011)
+
     def moveEvent(self, event):
         super().moveEvent(event)
         self.region_changed.emit(self.x(), self.y(), self.width(), self.height())
@@ -31,47 +39,65 @@ class ScanLineUI(QWidget):
         super().resizeEvent(event)
         self.region_changed.emit(self.x(), self.y(), self.width(), self.height())
 
-    # --- 그리기 및 마우스 조작 (이전과 동일) ---
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         width, height = self.rect().width(), self.rect().height()
         mid_y = height // 2
 
+        # 반투명 초록 배경 (이미지에는 안 찍힘)
         painter.setBrush(QColor(0, 255, 0, 30))
         painter.setPen(Qt.NoPen)
         painter.drawRect(self.rect())
 
+        # 중앙 가로선 (이미지에는 안 찍힘)
         painter.setPen(QPen(QColor(0, 255, 0, 255), 2))
         painter.drawLine(0, mid_y, width, mid_y)
 
+        # 외곽 점선
         painter.setPen(QPen(QColor(0, 200, 0, 150), 1, Qt.DashLine))
         painter.setBrush(Qt.NoBrush)
         painter.drawRect(0, 0, width - 1, height - 1)
 
+    # --- 💡 마우스 조작 로직 (이동/리사이즈 통합) ---
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             x = event.pos().x()
-            if x < self.margin: self.resizing_left = True
-            elif x > self.width() - self.margin: self.resizing_right = True
+            # 1. 왼쪽 끝 드래그 시 -> 왼쪽 리사이즈 모드
+            if x < self.margin:
+                self.resizing_left = True
+            # 2. 오른쪽 끝 드래그 시 -> 오른쪽 리사이즈 모드
+            elif x > self.width() - self.margin:
+                self.resizing_right = True
+            # 3. 가운데 드래그 시 -> 이동 모드
             else:
                 self.dragging = True
+                # [중요] 클릭 시점의 전역 좌표와 창 좌상단 좌표의 차이(Offset) 저장
                 self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
             event.accept()
 
     def mouseMoveEvent(self, event):
         x = event.pos().x()
-        if not (self.dragging or self.resizing_left or self.resizing_right):
-            if x < self.margin or x > self.width() - self.margin: self.setCursor(Qt.SizeHorCursor)
-            else: self.setCursor(Qt.SizeAllCursor)
         
+        # 커서 모양 변경 로직
+        if not (self.dragging or self.resizing_left or self.resizing_right):
+            if x < self.margin or x > self.width() - self.margin:
+                self.setCursor(Qt.SizeHorCursor)
+            else:
+                self.setCursor(Qt.SizeAllCursor)
+        
+        # 실제 동작 수행
         if self.dragging:
+            # 현재 마우스 전역 위치에서 처음 저장한 Offset을 빼서 창을 이동
             self.move(event.globalPos() - self.drag_position)
         elif self.resizing_right:
             self.resize(event.pos().x(), self.height())
         elif self.resizing_left:
             dx = event.pos().x()
-            self.setGeometry(self.x() + dx, self.y(), self.width() - dx, self.height())
+            new_x = self.x() + dx
+            new_width = self.width() - dx
+            if new_width > self.margin * 2: # 최소 너비 제한
+                self.setGeometry(new_x, self.y(), new_width, self.height())
         event.accept()
 
     def mouseReleaseEvent(self, event):
