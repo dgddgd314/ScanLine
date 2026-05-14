@@ -14,7 +14,8 @@ class ScanLineUI(QWidget):
         self.dragging = False
         self.resizing_left = False
         self.resizing_right = False
-        self.drag_position = QPoint() # 클릭 시점의 상대 좌표 저장용
+        self.drag_position = QPoint()
+        self.bg_opacity = 30
 
         self.initUI()
 
@@ -31,6 +32,19 @@ class ScanLineUI(QWidget):
             # WDA_EXCLUDEFROMCAPTURE = 0x00000011
             ctypes.windll.user32.SetWindowDisplayAffinity(hwnd, 0x00000011)
 
+    def set_opacity(self, value):
+        """0~100 사이의 값을 받아 배경 투명도 업데이트"""
+        self.bg_opacity = value
+        self.update() # 화면을 다시 그리도록 강제 호출 (paintEvent 재실행)
+        
+    def reset_position(self):
+        """제어판에서 초기화 버튼을 누르면 화면 중앙 근처로 원복"""
+        self.setGeometry(100, 200, 800, 100)
+   
+    def set_geometry_from_panel(self, x, y, w, h):
+        """제어판 스핀박스에서 좌표를 입력받아 창 크기 조절"""
+        self.setGeometry(x, y, w, h)
+            
     def moveEvent(self, event):
         super().moveEvent(event)
         self.region_changed.emit(self.x(), self.y(), self.width(), self.height())
@@ -45,10 +59,12 @@ class ScanLineUI(QWidget):
         width, height = self.rect().width(), self.rect().height()
         mid_y = height // 2
 
-        # 반투명 초록 배경 (이미지에는 안 찍힘)
-        painter.setBrush(QColor(0, 255, 0, 30))
-        painter.setPen(Qt.NoPen)
-        painter.drawRect(self.rect())
+        # QColor의 알파값은 0~255 기준이므로 비율을 맞춰줍니다.
+        if self.bg_opacity > 0:
+            alpha = int((self.bg_opacity / 100) * 255)
+            painter.setBrush(QColor(0, 255, 0, alpha))
+            painter.setPen(Qt.NoPen)
+            painter.drawRect(self.rect())
 
         # 중앙 가로선 (이미지에는 안 찍힘)
         painter.setPen(QPen(QColor(0, 255, 0, 255), 2))

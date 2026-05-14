@@ -10,6 +10,7 @@ class CaptureThread(QThread):
         self.fps = fps
         self.output_dir = output_dir
         self.is_running = True
+        self.is_capturing = False
         self.region = {"top": 0, "left": 0, "width": 100, "height": 100}
         os.makedirs(self.output_dir, exist_ok=True)
 
@@ -18,6 +19,11 @@ class CaptureThread(QThread):
         """UI의 Signal을 받아 좌표를 갱신하는 Slot"""
         self.region = {"top": y, "left": x, "width": width, "height": height}
 
+    @pyqtSlot(bool)
+    def set_capturing(self, state):
+        """💡 [추가] 제어판의 시작/정지 신호를 받아 캡처 상태 변경"""
+        self.is_capturing = state
+        
     def run(self):
         interval = 1.0 / self.fps
         frame_count = 0
@@ -25,12 +31,13 @@ class CaptureThread(QThread):
         with mss.mss() as sct:
             while self.is_running:
                 loop_start = time.time()
-                frame_count += 1
-
-                filename = os.path.join(self.output_dir, f"frame_{frame_count:03d}.png")
-                sct_img = sct.grab(self.region)
-                mss.tools.to_png(sct_img.rgb, sct_img.size, output=filename)
-
+                
+                if self.is_capturing: 
+                    frame_count += 1
+                    filename = os.path.join(self.output_dir, f"frame_{frame_count:03d}.png")
+                    sct_img = sct.grab(self.region)
+                    mss.tools.to_png(sct_img.rgb, sct_img.size, output=filename)
+                    
                 time_to_wait = interval - (time.time() - loop_start)
                 if time_to_wait > 0:
                     time.sleep(time_to_wait)
