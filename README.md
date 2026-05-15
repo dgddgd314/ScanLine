@@ -10,15 +10,15 @@
 - **[구현 완료] 동적 영역 컨트롤 (Dynamic ROI):** 사용자가 마우스로 선의 가로 길이를 늘이거나, 상하좌우 위치를 자유롭게 조절.
 - **[구현 완료] 유령 캡처 (Ghost Mode Capture):** OS 디스플레이 API를 활용하여, UI 창 자체는 사용자에게 보이지만 캡처 결과물에는 텍스트(배경)만 깔끔하게 찍히도록 처리.
 - **[구현 완료] 통합 제어판 (Control Panel):** 스캔 제어, 좌표/크기 미세 조정, 투명도 조절, 실시간 로그 확인이 가능한 양방향 동기화 대시보드.
-- **[구현 예정] 실시간 연속 캡처 및 OCR:** 지정된 영역을 높은 FPS로 캡처하고 텍스트로 변환.
+- **[구현 완료] 실시간 연속 캡처 및 OCR:** 지정된 영역을 높은 FPS로 캡처하고 `Tesseract`를 통해 실시간으로 텍스트로 변환 및 파일 누적 저장.
 - **[구현 예정] 스마트 중복 방지 (Stitching):** 스크롤 도중 동일한 문장이 여러 번 인식되더라도 자동으로 문맥을 이어붙여 중복 없는 결과물 생성.
 
 ## 🛠️ 기술 스택
 - **Language:** Python 3.x
 - **Screen Capture:** `mss` (초고속 화면 캡처)
 - **UI Framework:** `PyQt5` (투명 프레임리스 오버레이 및 스레드 관리)
-- **Image Processing (예정):** `OpenCV` (OCR 인식률 향상을 위한 전처리)
-- **OCR Engine (예정):** `Tesseract` 또는 `EasyOCR`
+- **Image Processing:** `OpenCV`, `NumPy` (이미지 배열 처리 및 전처리)
+- **OCR Engine:** `Tesseract` (`pytesseract`)
 
 ## 📂 프로젝트 구조 (Architecture)
 관심사 분리(Separation of Concerns) 원칙에 따라 UI 프론트엔드와 캡처 백그라운드 엔진을 완전히 분리하여 설계되었습니다.
@@ -27,11 +27,12 @@
 ScanLine/
 ├── main.py                 # 프로그램 진입점 (UI와 스레드 연결/조립)
 ├── core/
-│   ├── ocr_engine.py # 인메모리 큐를 처리하는 더미 소비자 로직
-│   └── capture_engine.py   # 백그라운드 캡처 로직 (QThread)
+│   ├── capture_engine.py   # 백그라운드 캡처 로직 (QThread)
+│   ├── ocr_engine.py       # 인메모리 큐 데이터 소비 및 파일 저장 로직 (Fail-Safe)
+│   └── ocr_processor.py    # Tesseract OCR 엔진 비즈니스 로직 (단일 책임)
 ├── ui/
 │   ├── ui_overlay.py       # 사용자 조작용 투명 가로선 창
-│   └── control_panel.py    # 설정 및 제어용 통합 대시보드 (신규)
+│   └── control_panel.py    # 설정 및 제어용 통합 대시보드
 └── .gitignore              # 캐시 및 테스트 이미지 업로드 방지
 ```
 
@@ -60,6 +61,13 @@ ScanLine/
 2. **더미 소비자 패턴:** 큐에 쌓인 데이터를 비동기적으로 가져오는 `OCRThread`를 생성하여 데이터의 흐름과 형태를 실시간 모니터링 (디스크 쓰기 완전 제거).
 3. **디버그 모드(Debug Mode):** 원할 때만 원본 이미지를 하드디스크에 저장할 수 있도록 토글 기능을 구현하여 테스트의 유연성을 확보.
 
+### Phase 5: 실제 OCR 엔진 연동 및 데이터 영속성 확보 (완료)
+더미 스레드에 실제 `Tesseract OCR` 엔진을 연동하여 텍스트 추출 및 파일 저장 파이프라인을 완성했습니다.
+
+1. **비즈니스 로직 분리:** OCR 처리만을 전담하는 `ocr_processor.py`를 독립시켜 확장성(EasyOCR 등 다른 엔진으로의 교체) 확보.
+2. **실시간 텍스트 추출:** 큐에서 꺼낸 NumPy 이미지 배열을 OpenCV로 변환 후 텍스트로 추출하여 제어판 로그 UI에 실시간 출력.
+3. **Fail-Safe 파일 저장 로직:** 추출된 텍스트를 지정된 `.txt` 파일에 누적(Append) 저장하며, 제어판에서 설정한 경로에 접근이 불가능할 경우 프로그램 다운을 방지하고 현재 폴더의 `output.txt`로 우회 저장하는 안전망 구축.
+
 ## ⚙️ 제어판 상세 명세 (Dashboard Specification)
 
 | 카테고리 | 주요 기능 | 상세 항목 |
@@ -68,8 +76,8 @@ ScanLine/
 | **스캔 설정** | 캡처 및 OCR | 스캔 시작/정지(Toggle), FPS 조절, OCR 인식 언어(KO/EN) 선택 |
 | **데이터 관리** | 저장 및 로그 | TXT 저장 경로 설정, 디버그 모드(이미지 저장 여부), 타임스탬프 기반 작동 로그 |
 
-## 🏗️ 시스템 아키텍처 (Next Architecture: In-Memory Pipeline)
-실시간 데이터를 가장 효율적으로 처리하기 위한 인메모리(In-Memory) 큐 기반 데이터 흐름 설계입니다. (Phase 4 구현 예정)
+## 🏗️ 시스템 아키텍처 (In-Memory Pipeline)
+실시간 데이터를 가장 효율적으로 처리하기 위한 인메모리(In-Memory) 큐 기반 데이터 흐름 설계입니다.
 
 ```text
 [Screen] 
@@ -84,15 +92,16 @@ ScanLine/
 
 ## 🚧 해결해야 할 기술적 과제 & 다음 단계 (Next Steps)
 
-1. **실제 OCR 엔진 연동:** 현재 더미(Dummy)로 동작하는 `OCRThread`에 `Tesseract` 또는 `EasyOCR`을 탑재하여 큐(Queue)에서 꺼낸 픽셀 데이터를 실제 텍스트로 변환.
-2. **이미지 전처리 (Preprocessing):** 캡처된 이미지를 `OpenCV`를 활용해 흑백화 및 이진화(Binarization) 처리하여 OCR 엔진의 인식 속도와 정확도 극대화.
-3. **텍스트 병합 (Deduplication & Stitching):** `difflib` 모듈 등을 활용해 이전 프레임과 현재 프레임의 겹치는 텍스트를 파악하고, 역방향 스크롤 시 발생하는 예외 상황을 고려한 지능형 자동 병합 알고리즘 구현.
+1. **스마트 텍스트 병합 (Stitching):** 현재 FPS 속도로 인해 발생하는 텍스트 중복 저장 문제를 해결하기 위해, `difflib` 모듈 등을 활용해 이전 프레임과 현재 프레임의 겹치는 문맥을 파악하고 새로 등장한 글자만 덧붙이는 지능형 병합 알고리즘 구현.
+2. **이미지 고급 전처리 (Preprocessing):** 가장자리 노이즈(Edge Noise) 및 외계어 출력을 줄이기 위해, `OpenCV`를 활용한 이진화(Binarization) 및 노이즈 제거 필터 적용.
 
-## 🏃‍♂️ 실행 방법 (현재 Phase 3 기준)
+## 🏃‍♂️ 실행 방법 (현재 Phase 5 기준)
+
+**⚠️ 주의:** 이 프로그램을 실행하기 위해서는 운영체제에 [Tesseract-OCR](https://github.com/UB-Mannheim/tesseract/wiki) (한국어 팩 포함)이 설치되어 있어야 합니다.
 
 ```bash
 # 1. 필수 라이브러리 설치
-pip install mss PyQt5 numpy
+pip install mss PyQt5 numpy opencv-python pytesseract
 
 # 2. 프로그램 실행
 python main.py
