@@ -37,11 +37,13 @@ def main():
     control_panel.debug_mode_changed.connect(lambda is_on: control_panel.log_message(f"Debug Mode (File Save): {'ON' if is_on else 'OFF'}"))
     
     # 제어판의 텍스트 저장 경로 업데이트 -> OCR 스레드에 경로 동기화
-    control_panel.save_path_changed.connect(ocr_thread.set_save_path)
+    control_panel.save_folder_changed.connect(ocr_thread.set_save_folder)
     
     # 캡처/OCR 진행률 시그널 -> 제어판 UI 업데이트 연결
     capture_thread.scan_session_started.connect(control_panel.on_session_started)
+    capture_thread.scan_session_started.connect(ocr_thread.on_session_started)
     capture_thread.frame_captured.connect(control_panel.on_frame_captured)
+    
     ocr_thread.frame_processed.connect(control_panel.on_frame_processed)
     
     # OCR 스레드 로그 출력

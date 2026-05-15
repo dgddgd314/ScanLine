@@ -12,7 +12,7 @@ class ControlPanel(QWidget):
     debug_mode_changed = pyqtSignal(bool)
     fps_changed = pyqtSignal(int)
     geometry_changed = pyqtSignal(int, int, int, int) # x, y, w, h
-    save_path_changed = pyqtSignal(str)
+    save_folder_changed = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
@@ -94,14 +94,15 @@ class ControlPanel(QWidget):
         data_group = QGroupBox("3. Data Management")
         data_layout = QVBoxLayout()
 
-        # 💡 [추가] 저장 경로 설정
+        # 저장 경로 설정
         path_layout = QHBoxLayout()
-        self.path_label = QLabel(os.path.abspath("output.txt"))
-        self.path_label.setStyleSheet("color: gray;")
-        self.path_btn = QPushButton("Set TXT Path")
-        self.path_btn.clicked.connect(self.select_save_path)
+        self.folder_label = QLabel(os.getcwd()) # 기본값: 현재 작업 폴더
+        self.folder_label.setStyleSheet("color: gray; font-size: 11px;")
+        self.folder_label.setWordWrap(True)
+        self.path_btn = QPushButton("Set Save Folder")
+        self.path_btn.clicked.connect(self.select_save_folder)
         path_layout.addWidget(self.path_btn)
-        path_layout.addWidget(self.path_label, stretch=1)
+        path_layout.addWidget(self.folder_label, stretch=1)
 
         # 디버그 모드
         self.debug_check = QCheckBox("Save Original Images (Debug Mode)")
@@ -109,7 +110,6 @@ class ControlPanel(QWidget):
         
         data_layout.addLayout(path_layout)
         data_layout.addWidget(self.debug_check)
-        data_group.setLayout(data_layout)
         
         # 글로벌 카운터
         self.global_counter_label = QLabel("Total Captured: 0장  |  OCR Completed: 0장")
@@ -161,12 +161,12 @@ class ControlPanel(QWidget):
     def on_debug_mode_changed(self, state):
         self.debug_mode_changed.emit(state == Qt.Checked)
 
-    def select_save_path(self):
-        options = QFileDialog.Options()
-        file_name, _ = QFileDialog.getSaveFileName(self, "Save Text File", "", "Text Files (*.txt);;All Files (*)", options=options)
-        if file_name:
-            self.path_label.setText(file_name)
-            self.save_path_changed.emit(file_name)
+    def select_save_folder(self):
+        """저장할 폴더를 선택하는 창을 띄움"""
+        folder = QFileDialog.getExistingDirectory(self, "Select Save Folder")
+        if folder:
+            self.folder_label.setText(folder)
+            self.save_folder_changed.emit(folder)
 
     def on_geometry_spin_changed(self):
         x = self.spin_x.value()
@@ -182,7 +182,7 @@ class ControlPanel(QWidget):
         self.spin_w.blockSignals(True); self.spin_w.setValue(w); self.spin_w.blockSignals(False)
         self.spin_h.blockSignals(True); self.spin_h.setValue(h); self.spin_h.blockSignals(False)
 
-# --- 진행률 업데이트 로직 ---
+    # --- 진행률 업데이트 로직 ---
     @pyqtSlot(int)
     def on_session_started(self, session_id):
         # 새로운 스캔 시작 시, 새 프로그레스 바 생성
