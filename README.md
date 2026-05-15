@@ -27,6 +27,7 @@
 ScanLine/
 ├── main.py                 # 프로그램 진입점 (UI와 스레드 연결/조립)
 ├── core/
+│   ├── ocr_engine.py # 인메모리 큐를 처리하는 더미 소비자 로직
 │   └── capture_engine.py   # 백그라운드 캡처 로직 (QThread)
 ├── ui/
 │   ├── ui_overlay.py       # 사용자 조작용 투명 가로선 창
@@ -52,6 +53,13 @@ ScanLine/
 2. **양방향 데이터 동기화 (Two-way Binding):** 오버레이 창을 마우스로 움직이면 제어판의 숫자가 바뀌고, 제어판 숫자를 바꾸면 창이 움직이도록 Signal & Slot 연동 완료.
 3. **스레드 제어 및 타임스탬프 로그:** 캡처 스레드의 대기(Idle)/실행(Running) 상태를 제어판의 시작/정지 스위치로 조작하며, 실시간 작동 시간(Timestamp)이 찍히는 로그(Live Preview) 기능 추가.
 
+### Phase 4: 인메모리 파이프라인(In-Memory Pipeline) 구축 (완료)
+디스크 I/O로 인한 병목 현상을 제거하고 `Queue`를 활용한 메모리 기반의 데이터 릴레이를 구현했습니다.
+
+1. **인메모리 릴레이:** 캡처된 화면을 하드디스크에 저장하지 않고, `NumPy` 배열 형태로 RAM의 큐(Queue)에 즉시 전달.
+2. **더미 소비자 패턴:** 큐에 쌓인 데이터를 비동기적으로 가져오는 `OCRThread`를 생성하여 데이터의 흐름과 형태를 실시간 모니터링 (디스크 쓰기 완전 제거).
+3. **디버그 모드(Debug Mode):** 원할 때만 원본 이미지를 하드디스크에 저장할 수 있도록 토글 기능을 구현하여 테스트의 유연성을 확보.
+
 ## ⚙️ 제어판 상세 명세 (Dashboard Specification)
 
 | 카테고리 | 주요 기능 | 상세 항목 |
@@ -76,16 +84,15 @@ ScanLine/
 
 ## 🚧 해결해야 할 기술적 과제 & 다음 단계 (Next Steps)
 
-1. **인메모리 릴레이 (In-Memory Relay):** 하드디스크 쓰기(Disk I/O) 과정을 생략하고, RAM 상에서 픽셀 데이터를 직접 큐(Queue)로 전달하여 시스템 병목 현상 최소화.
-2. **OCR 엔진 연동 (Tesseract/EasyOCR):** 캡처 스레드(생산자)에서 큐에 넣은 이미지를 꺼내와 텍스트를 추출하는 독립적인 `OCR Thread`(소비자) 파이프라인 구축.
-3. **이미지 전처리 (Preprocessing):** 캡처된 이미지를 `OpenCV`를 활용해 흑백화 및 이진화(Binarization) 처리하여 OCR 엔진의 인식 속도와 정확도 극대화.
-4. **텍스트 병합 (Deduplication & Stitching):** `difflib` 모듈 등을 활용해 이전 프레임과 현재 프레임의 겹치는 텍스트를 파악하고, 위아래 스크롤 시 발생하는 예외 상황을 고려한 지능형 자동 병합 알고리즘 구현.
+1. **실제 OCR 엔진 연동:** 현재 더미(Dummy)로 동작하는 `OCRThread`에 `Tesseract` 또는 `EasyOCR`을 탑재하여 큐(Queue)에서 꺼낸 픽셀 데이터를 실제 텍스트로 변환.
+2. **이미지 전처리 (Preprocessing):** 캡처된 이미지를 `OpenCV`를 활용해 흑백화 및 이진화(Binarization) 처리하여 OCR 엔진의 인식 속도와 정확도 극대화.
+3. **텍스트 병합 (Deduplication & Stitching):** `difflib` 모듈 등을 활용해 이전 프레임과 현재 프레임의 겹치는 텍스트를 파악하고, 역방향 스크롤 시 발생하는 예외 상황을 고려한 지능형 자동 병합 알고리즘 구현.
 
 ## 🏃‍♂️ 실행 방법 (현재 Phase 3 기준)
 
 ```bash
 # 1. 필수 라이브러리 설치
-pip install mss PyQt5
+pip install mss PyQt5 numpy
 
 # 2. 프로그램 실행
 python main.py

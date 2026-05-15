@@ -2,15 +2,18 @@ import os
 import time
 import mss
 import mss.tools
+import numpy as np
 from PyQt5.QtCore import QThread, pyqtSlot
 
 class CaptureThread(QThread):
-    def __init__(self, fps=5, output_dir="scanline_captures"):
+    def __init__(self, image_queue, fps=5, output_dir="scanline_captures"):
         super().__init__()
+        self.image_queue = image_queue
         self.fps = fps
         self.output_dir = output_dir
         self.is_running = True
         self.is_capturing = False
+        self.debug_mode = False     # 이미지 파일 저장 여부
         self.region = {"top": 0, "left": 0, "width": 100, "height": 100}
         os.makedirs(self.output_dir, exist_ok=True)
 
@@ -21,8 +24,13 @@ class CaptureThread(QThread):
 
     @pyqtSlot(bool)
     def set_capturing(self, state):
-        """💡 [추가] 제어판의 시작/정지 신호를 받아 캡처 상태 변경"""
+        """제어판의 시작/정지 신호를 받아 캡처 상태 변경"""
         self.is_capturing = state
+        
+    @pyqtSlot(bool)
+    def set_debug_mode(self, state):
+        """제어판의 체크박스 상태를 받아옴"""
+        self.debug_mode = state
         
     def run(self):
         interval = 1.0 / self.fps
@@ -34,10 +42,15 @@ class CaptureThread(QThread):
                 
                 if self.is_capturing: 
                     frame_count += 1
-                    filename = os.path.join(self.output_dir, f"frame_{frame_count:03d}.png")
                     sct_img = sct.grab(self.region)
-                    mss.tools.to_png(sct_img.rgb, sct_img.size, output=filename)
                     
+                    img_np = np.array(sct_img)
+                    self.image_queue.put(img_np)
+
+                    if self.debug_mode:
+                        filename = os.path.join(self.output_dir, f"frame_{frame_count:03d}.png")
+                        mss.tools.to_png(sct_img.rgb, sct_img.size, output=filename)
+                                          
                 time_to_wait = interval - (time.time() - loop_start)
                 if time_to_wait > 0:
                     time.sleep(time_to_wait)
