@@ -1,9 +1,10 @@
 import os
 import datetime
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
-                             QLabel, QSlider, QGroupBox, QComboBox, QTextEdit, 
-                             QCheckBox, QSpinBox, QFileDialog)
-from PyQt5.QtCore import Qt, pyqtSignal
+                             QLabel, QGroupBox, QComboBox, QTextEdit, 
+                             QCheckBox, QSpinBox, QFileDialog, QProgressBar, 
+                             QScrollArea, QMessageBox, QApplication)
+from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
 
 class ControlPanel(QWidget):
     scan_toggled = pyqtSignal(bool)
@@ -16,6 +17,12 @@ class ControlPanel(QWidget):
     def __init__(self):
         super().__init__()
         self.is_scanning = False
+        self.total_captured = 0
+        self.total_processed = 0
+        self.session_total_frames = {}      # {세션ID: 찍힌 총 사진 수}
+        self.session_processed_frames = {}  # {세션ID: 처리된 사진 수}
+        self.session_progress_bars = {}     # {세션ID: QProgressBar 객체}
+        
         self.initUI()
 
     def initUI(self):
@@ -103,6 +110,24 @@ class ControlPanel(QWidget):
         data_layout.addLayout(path_layout)
         data_layout.addWidget(self.debug_check)
         data_group.setLayout(data_layout)
+        
+        # 글로벌 카운터
+        self.global_counter_label = QLabel("Total Captured: 0장  |  OCR Completed: 0장")
+        self.global_counter_label.setStyleSheet("font-weight: bold; color: #333; margin-top: 10px;")
+        
+        # 세션별 프로그레스 바를 담을 스크롤 영역
+        self.progress_scroll = QScrollArea()
+        self.progress_scroll.setWidgetResizable(True)
+        self.progress_scroll.setFixedHeight(120) # 스크롤 창 높이 고정
+        
+        self.progress_container = QWidget()
+        self.progress_layout = QVBoxLayout(self.progress_container)
+        self.progress_layout.setAlignment(Qt.AlignTop)
+        self.progress_scroll.setWidget(self.progress_container)
+        
+        data_layout.addWidget(self.global_counter_label)
+        data_layout.addWidget(self.progress_scroll)
+        data_group.setLayout(data_layout)
 
         # ==========================================
         # 4. 미리보기 (Live Preview)
@@ -157,6 +182,66 @@ class ControlPanel(QWidget):
         self.spin_w.blockSignals(True); self.spin_w.setValue(w); self.spin_w.blockSignals(False)
         self.spin_h.blockSignals(True); self.spin_h.setValue(h); self.spin_h.blockSignals(False)
 
+# --- 진행률 업데이트 로직 ---
+    @pyqtSlot(int)
+    def on_session_started(self, session_id):
+        # 새로운 스캔 시작 시, 새 프로그레스 바 생성
+        bar = QProgressBar()
+        bar.setValue(0)
+        bar.setFormat(f"Scan #{session_id}: %v/%m장 완료 (%p%)")
+        bar.setStyleSheet("QProgressBar::chunk { background-color: #2196F3; }")
+        
+        self.session_progress_bars[session_id] = bar
+        self.session_total_frames[session_id] = 0
+        self.session_processed_frames[session_id] = 0
+        
+        # 스크롤 뷰 맨 위에 새 바를 추가 (최신 스캔이 위로 오도록)
+        self.progress_layout.insertWidget(0, bar)
+
+    @pyqtSlot(int)
+    def on_frame_captured(self, session_id):
+        self.total_captured += 1
+        self.session_total_frames[session_id] += 1
+        self.update_global_counter()
+        
+        # 바의 최대치(100%)를 찍힌 사진 수로 실시간 업데이트
+        bar = self.session_progress_bars[session_id]
+        bar.setMaximum(self.session_total_frames[session_id])
+
+    @pyqtSlot(int)
+    def on_frame_processed(self, session_id):
+        self.total_processed += 1
+        self.session_processed_frames[session_id] += 1
+        self.update_global_counter()
+        
+        # 바의 현재 값을 처리된 사진 수로 업데이트
+        bar = self.session_progress_bars[session_id]
+        bar.setValue(self.session_processed_frames[session_id])
+
+    def update_global_counter(self):
+        self.global_counter_label.setText(f"Total Captured: {self.total_captured}장  |  OCR Completed: {self.total_processed}장")
+
+    # --- 안전 종료 ---
+    def closeEvent(self, event):
+        """사용자가 창의 X 버튼을 눌러 끌 때 발동"""
+        if self.total_captured > self.total_processed:
+            reply = QMessageBox.warning(
+                self, 
+                '종료 경고',
+                f'아직 OCR 처리가 진행 중인 데이터가 {self.total_captured - self.total_processed}장 남아있습니다!\n강제로 종료하시면 남은 데이터는 저장되지 않습니다.\n\n정말 종료하시겠습니까?',
+                QMessageBox.Yes | QMessageBox.No, 
+                QMessageBox.No
+            )
+            if reply == QMessageBox.Yes:
+                event.accept()
+                QApplication.instance().quit() # 앱 완전 종료
+            else:
+                event.ignore() # 창 닫기 취소
+        else:
+            event.accept()
+            QApplication.instance().quit()
+            
+            
     def log_message(self, message):
         current_time = datetime.datetime.now().strftime("%H:%M:%S")
         self.log_console.append(f"[{current_time}] {message}")

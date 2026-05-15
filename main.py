@@ -39,7 +39,12 @@ def main():
     # 제어판의 텍스트 저장 경로 업데이트 -> OCR 스레드에 경로 동기화
     control_panel.save_path_changed.connect(ocr_thread.set_save_path)
     
-    # 더미 OCR 스레드 로그 출력
+    # 캡처/OCR 진행률 시그널 -> 제어판 UI 업데이트 연결
+    capture_thread.scan_session_started.connect(control_panel.on_session_started)
+    capture_thread.frame_captured.connect(control_panel.on_frame_captured)
+    ocr_thread.frame_processed.connect(control_panel.on_frame_processed)
+    
+    # OCR 스레드 로그 출력
     ocr_thread.log_signal.connect(control_panel.log_message)
     
     # 초기 상태 동기화 및 실행

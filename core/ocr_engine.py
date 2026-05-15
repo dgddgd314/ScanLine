@@ -6,6 +6,8 @@ from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot
 class OCRThread(QThread):
     # UI의 실시간 로그창으로 메시지를 보낼 시그널
     log_signal = pyqtSignal(str)
+    # OCR 완료 보고 시그널 (세션 ID 반환)
+    frame_processed = pyqtSignal(int)
 
     def __init__(self, image_queue):
         super().__init__()
@@ -25,8 +27,11 @@ class OCRThread(QThread):
         while self.is_running:
             try:
                 # 1. 큐에서 캡처된 이미지 데이터 꺼내기 (1초 대기)
-                frame_data = self.image_queue.get(timeout=1)
+                item = self.image_queue.get(timeout=1)
+                session_id, frame_data = item
                 extracted_text = self.processor.extract_text(frame_data, lang='kor+eng') # 여기가 본격적인 인식 처리 부분
+                
+                self.frame_processed.emit(session_id)  # OCR 완료 신호 발송
                 
                 if extracted_text:
                     self.log_signal.emit(f"📝 {extracted_text}")    # 로그 찍기
