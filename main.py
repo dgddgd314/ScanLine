@@ -19,7 +19,6 @@ def main():
     ocr_thread = OCRThread(image_queue=image_queue)
 
     # [UI <-> UI 연결]
-    control_panel.opacity_changed.connect(overlay_ui.set_opacity)
     control_panel.reset_requested.connect(overlay_ui.reset_position)
     control_panel.geometry_changed.connect(overlay_ui.set_geometry_from_panel)
     overlay_ui.region_changed.connect(control_panel.update_geometry_spins)
@@ -27,12 +26,18 @@ def main():
     # [UI <-> 백그라운드 스레드 연결]
     overlay_ui.region_changed.connect(capture_thread.update_region)
     control_panel.fps_changed.connect(lambda fps: setattr(capture_thread, 'fps', fps))
-    control_panel.scan_toggled.connect(capture_thread.set_capturing)
-    control_panel.scan_toggled.connect(lambda is_on: control_panel.log_message(f"Scan Mode: {'ON' if is_on else 'OFF'}")) # TODO: 실제 스캔 모드 토글 기능은 나중에 구현 예정
     
-    # [추가] 디버그 모드 토글 연결
+    # 스캔 시작/정지 토글 연결
+    control_panel.scan_toggled.connect(capture_thread.set_capturing)
+    control_panel.scan_toggled.connect(lambda is_on: control_panel.log_message(f"Scan Mode: {'ON' if is_on else 'OFF'}"))
+    control_panel.scan_toggled.connect(overlay_ui.set_scanning_state)
+    
+    # 디버그 모드 토글 연결
     control_panel.debug_mode_changed.connect(capture_thread.set_debug_mode)
     control_panel.debug_mode_changed.connect(lambda is_on: control_panel.log_message(f"Debug Mode (File Save): {'ON' if is_on else 'OFF'}"))
+    
+    # 제어판의 텍스트 저장 경로 업데이트 -> OCR 스레드에 경로 동기화
+    control_panel.save_path_changed.connect(ocr_thread.set_save_path)
     
     # 더미 OCR 스레드 로그 출력
     ocr_thread.log_signal.connect(control_panel.log_message)
@@ -43,8 +48,7 @@ def main():
     )
     control_panel.update_geometry_spins(overlay_ui.x(), overlay_ui.y(), overlay_ui.width(), overlay_ui.height())
     
-    # 처음에 캡처 스레드는 바로 시작하지 않고, 제어판에서 버튼을 누를 때 시작하게끔 구조를 나중에 바꿀 예정입니다.
-    # 일단은 테스트를 위해 같이 켜둡니다.
+    # 처음에 캡처 스레드는 바로 시작하지 않고, 제어판에서 버튼을 누를 때 시작하게
     capture_thread.start()
     ocr_thread.start()
     

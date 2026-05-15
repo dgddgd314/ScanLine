@@ -7,11 +7,8 @@ from PyQt5.QtCore import Qt, pyqtSignal
 
 class ControlPanel(QWidget):
     scan_toggled = pyqtSignal(bool)
-    opacity_changed = pyqtSignal(int)
     reset_requested = pyqtSignal()
     debug_mode_changed = pyqtSignal(bool)
-    
-    # 💡 [추가] 새로운 시그널
     fps_changed = pyqtSignal(int)
     geometry_changed = pyqtSignal(int, int, int, int) # x, y, w, h
     save_path_changed = pyqtSignal(str)
@@ -23,7 +20,7 @@ class ControlPanel(QWidget):
 
     def initUI(self):
         self.setWindowTitle('ScanLine Control Panel')
-        self.setGeometry(100, 100, 450, 650) # 창 크기 약간 키움
+        self.setGeometry(100, 100, 450, 650)
         
         main_layout = QVBoxLayout()
 
@@ -32,15 +29,6 @@ class ControlPanel(QWidget):
         # ==========================================
         overlay_group = QGroupBox("1. Overlay Controls")
         overlay_layout = QVBoxLayout()
-
-        # 투명도
-        opacity_layout = QHBoxLayout()
-        opacity_layout.addWidget(QLabel("Opacity (%):"))
-        self.opacity_slider = QSlider(Qt.Horizontal)
-        self.opacity_slider.setRange(0, 100) # 💡 투명도 0 허용
-        self.opacity_slider.setValue(30)
-        self.opacity_slider.valueChanged.connect(self.on_opacity_changed)
-        opacity_layout.addWidget(self.opacity_slider)
 
         # 💡 [추가] 좌표 및 크기 스핀박스 (X, Y, W, H)
         geom_layout = QHBoxLayout()
@@ -57,7 +45,6 @@ class ControlPanel(QWidget):
         self.reset_btn = QPushButton("Reset UI Position")
         self.reset_btn.clicked.connect(self.reset_requested.emit)
 
-        overlay_layout.addLayout(opacity_layout)
         overlay_layout.addLayout(geom_layout)
         overlay_layout.addWidget(self.reset_btn)
         overlay_group.setLayout(overlay_layout)
@@ -145,9 +132,6 @@ class ControlPanel(QWidget):
             self.toggle_btn.setText("Start Scanning ▶")
             self.toggle_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold; padding: 15px; font-size: 14px;")
         self.scan_toggled.emit(self.is_scanning)
-
-    def on_opacity_changed(self, value):
-        self.opacity_changed.emit(value)
         
     def on_debug_mode_changed(self, state):
         self.debug_mode_changed.emit(state == Qt.Checked)
