@@ -1,6 +1,7 @@
 import os
 import datetime
 import queue
+from core.image_preprocessor import ImagePreprocessor
 from core.ocr_processor import TesseractProcessor
 from core.text_stitcher import TextStitcher
 from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot
@@ -16,6 +17,7 @@ class OCRThread(QThread):
         self.image_queue = image_queue
         self.is_running = True
         
+        self.preprocessor = ImagePreprocessor()
         self.processor = TesseractProcessor()
         self.stitcher = TextStitcher(match_threshold=3)
         
@@ -45,7 +47,9 @@ class OCRThread(QThread):
             try:
                 # 1. 큐에서 캡처된 이미지 데이터 꺼내기 (1초 대기)
                 session_id, frame_data = self.image_queue.get(timeout=1)
-                raw_text = self.processor.extract_text(frame_data, lang='kor+eng') # 여기가 본격적인 인식 처리 부분
+                processed_image = self.preprocessor.process(frame_data)
+                
+                raw_text = self.processor.extract_text(processed_image, lang='kor+eng') # 여기가 본격적인 인식 처리 부분
                 stitched_text = self.stitcher.stitch(raw_text)
                 
                 self.frame_processed.emit(session_id)  # OCR 완료 신호 발송

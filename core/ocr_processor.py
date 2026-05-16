@@ -1,35 +1,21 @@
-import cv2
 import pytesseract
-import numpy as np
 
 class TesseractProcessor:
-    def __init__(self):
-        # 1단계에서 설치한 Tesseract 실행 파일의 절대 경로를 지정합니다.
-        pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+    """Tesseract 엔진을 활용한 텍스트 추출 엔진"""
+    
+    def __init__(self, tesseract_cmd=r'C:\Program Files\Tesseract-OCR\tesseract.exe'):
+        # 윈도우 환경 등에서 tesseract.exe 경로를 수동으로 지정해야 할 경우 사용
+        if tesseract_cmd:
+            pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+
+    def extract_text(self, processed_image, lang='kor+eng'):
+        """이미 '전처리가 완료된' 이미지 배열을 받아 텍스트만 추출"""
         
-        # psm 6: 이미지를 하나의 텍스트 블록으로 가정하고 인식 (스크롤 스캔에 적합)
-        self.custom_config = r'--oem 3 --psm 6'
+        # Tesseract 설정 (PSM 6: 단일 텍스트 블록으로 가정하고 읽기)
+        custom_config = r'--oem 3 --psm 6'
 
-    def extract_text(self, img_np: np.ndarray, lang: str = 'kor+eng') -> str:
-        """NumPy 배열(이미지)을 받아 Tesseract를 통해 텍스트로 변환"""
-        if img_np is None or img_np.size == 0:
-            return ""
+        # 텍스트 추출
+        text = pytesseract.image_to_string(processed_image, lang=lang, config=custom_config)
 
-        try:
-            # mss는 기본적으로 BGRA(알파 채널 포함) 포맷을 반환하므로 BGR로 변환
-            if img_np.shape[2] == 4:
-                img_bgr = cv2.cvtColor(img_np, cv2.COLOR_BGRA2BGR)
-            else:
-                img_bgr = img_np
-                
-            # 가벼운 이미지 전처리: 흑백화(Grayscale) 처리를 통해 인식률 향상
-            gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-            
-            # 실제 OCR 처리
-            text = pytesseract.image_to_string(gray, lang=lang, config=self.custom_config)
-            
-            # 양쪽 공백 및 줄바꿈 제거 후 반환
-            return text.strip()
-            
-        except Exception as e:
-            return f"[OCR 처리 에러]: {e}"
+        # 양끝 공백 및 불필요한 줄바꿈 제거 후 반환
+        return text.strip()
