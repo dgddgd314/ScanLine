@@ -1,5 +1,5 @@
 import pytesseract
-from core.preprocessor.tesseract_preprocessor import TesseractPreprocessor
+from core.ocr.preprocessor.tesseract_preprocessor import TesseractPreprocessor
 
 class TesseractProcessor:
     """Tesseract 엔진을 활용한 텍스트 추출 엔진"""

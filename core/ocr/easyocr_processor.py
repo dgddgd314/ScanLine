@@ -1,5 +1,5 @@
 import easyocr
-from core.preprocessor.easyocr_preprocessor import EasyOCRPreprocessor
+from core.ocr.preprocessor.easyocr_preprocessor import EasyOCRPreprocessor
 class EasyOCRProcessor:
     """EasyOCR(딥러닝) 엔진을 활용한 텍스트 추출 엔진"""
     
