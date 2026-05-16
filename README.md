@@ -11,30 +11,40 @@
 - **[구현 완료] 유령 캡처 (Ghost Mode Capture):** OS 디스플레이 API를 활용하여, UI 창 자체는 사용자에게 보이지만 캡처 결과물에는 텍스트(배경)만 깔끔하게 찍히도록 처리.
 - **[구현 완료] 통합 제어판 (Control Panel):** 스캔 제어, 좌표/크기 미세 조정, 실시간 로그 및 OCR 진척도 확인이 가능한 양방향 동기화 대시보드.
 - **[구현 완료] 실시간 캡처 및 세션별 자동 저장:** 스캔을 시작할 때마다 자동으로 타임스탬프 기반 텍스트 파일을 생성하고, 높은 FPS로 캡처된 이미지를 큐 기반 파이프라인을 통해 누적 저장.
-- **[구현 예정] 스마트 중복 방지 (Stitching):** 스크롤 도중 동일한 문장이 여러 번 인식되더라도 자동으로 문맥을 이어붙여 중복 없는 결과물 생성.
+- **[구현 완료] 하이브리드 OCR 엔진 아키텍처:** 고정밀 딥러닝 기반의 **EasyOCR**과 이진화 기반의 **Tesseract**를 독립된 전처리기 부품과 함께 유연하게 갈아 끼울 수 있는 단일 인터페이스 구조 확립.
+- **[고도화 중] 스마트 중복 방지 (Stitching):** 스크롤 도중 동일한 문장이 여러 번 인식되더라도 자동으로 문맥을 이어붙여 중복 없는 결과물을 생성하는 매칭 엔진 고도화 (EasyOCR 특유의 다중 바운딩 박스 분할 인식 대응 튜닝 진행 중).
 
 ## 🛠️ 기술 스택
 - **Language:** Python 3.x
 - **Screen Capture:** `mss` (초고속 화면 캡처)
-- **UI Framework:** `PyQt5` (투명 프레임리스 오버레이 및 스레드 관리)
-- **Image Processing:** `OpenCV`, `NumPy` (이미지 배열 처리 및 전처리)
-- **OCR Engine:** `Tesseract` (`pytesseract`)
+- **UI Framework:** `PyQt5` (투명 프레임리스 오버레이 및 멀티스레드 제어)
+- **Image Processing:** `OpenCV`, `NumPy` (이미지 배열 처리 및 엔진별 전처리)
+- **Deep Learning OCR Engine:** `PyTorch`, `EasyOCR` (메인 엔진: 고정밀 영/한 딥러닝 판독)
+- **Legacy OCR Engine:** `Tesseract` (`pytesseract`)
 
 ## 📂 프로젝트 구조 (Architecture)
 관심사 분리(Separation of Concerns) 원칙에 따라 UI 프론트엔드와 캡처 백그라운드 엔진을 완전히 분리하여 설계되었습니다.
 
 ```text
 ScanLine/
-├── main.py                 # 프로그램 진입점 (UI와 스레드 연결/조립)
+├── main.py                 # 프로그램 진입점 (UI-스레드 조립, PyQt 윈도우 1114 DLL 버그 우회 임포트 적용)
 ├── core/
+│   ├── ocr/                # OCR 비즈니스 로직 패키지
+│   │   ├── preprocessor/   # OCR 엔진별 전담 전처리 디렉토리
+│   │   │   ├── easyocr_preprocessor.py    # EasyOCR 최적화 전처리 (그레이스케일, 2배율 확대, 이진화 배제)
+│   │   │   └── tesseract_preprocessor.py  # Tesseract 최적화 전처리 (칼같은 Otsu 이진화)
+│   │   ├── __init__.py
+│   │   ├── easyocr_processor.py           # EasyOCR 구동 및 전처리기 내장 캡슐화 클래스
+│   │   └── tesseract_processor.py         # Tesseract 구동 및 전처리기 내장 캡슐화 클래스
 │   ├── capture_engine.py   # 백그라운드 캡처 로직 (QThread)
-│   ├── ocr_engine.py       # 인메모리 큐 데이터 소비 및 파일 저장 로직 (Fail-Safe)
-│   └── ocr_processor.py    # Tesseract OCR 엔진 비즈니스 로직 (단일 책임)
+│   ├── ocr_engine.py       # 인메모리 큐 데이터 소비 및 실시간 영속성(저장) 제어 스레드
+│   └── text_stitcher.py    # 실시간 중복 텍스트 컨텍스트 매칭 및 병합 엔진
 ├── ui/
-│   ├── ui_overlay.py       # 사용자 조작용 투명 가로선 창
-│   ├── control_panel.py    # 설정 및 제어용 통합 대시보드
+│   ├── ui_overlay.py       # 사용자 조작용 투명 가로선 오버레이 UI
+│   ├── control_panel.py    # 설정 및 제어용 통합 대시보드 UI
 │   └── style_config.py     # UI 디자인 속성 및 테마(색상, 투명도) 중앙 관리 설정 파일
-└── .gitignore              # 캐시 및 테스트 이미지 업로드 방지
+├── scanline_captures/      # [디버그 모드] 캡처된 원본 이미지 저장 디렉토리
+└── .gitignore              # 캐시(__pycache__), 디버그 이미지 및 가상환경 환경 설정 제외
 ```
 
 ## 🚀 현재 진행 상황
@@ -77,6 +87,21 @@ ScanLine/
 3. **타임스탬프 기반 폴더 저장:** 단일 텍스트 파일 덮어쓰기 방식에서 벗어나, 지정한 폴더에 스캔 시작 시각(`scan_YYYYMMDD_HHMMSS.txt`)을 기준으로 매번 독립된 파일을 자동 생성하도록 데이터 관리 구조 개편.
 4. **안전 종료 방패 (Fail-Safe Exit):** 앱 종료 시 메모리 큐에 텍스트로 변환되지 못한 미처리 프레임이 남아있을 경우 경고 팝업을 띄워 데이터 유실을 방지.
 
+### Phase 7: 딥러닝 기반 EasyOCR 도입 및 환경 최적화 (완료)
+기존 Tesseract 엔진의 영/한 및 기술 용어 오인식 한계를 극복하기 위해 PyTorch 기반의 EasyOCR로 엔진을 대전환하고, 최신 라이브러리 간의 호환성 및 OS 버그를 완벽히 해결했습니다.
+
+1. **임포트 순서 최적화를 통한 DLL 충돌 우회:** 최신 PyTorch가 윈도우 환경에서 PyQt5보다 늦게 임포트될 때 발생하는 악명 높은 `[WinError 1114] (c10.dll)` 에러를 해결하기 위해, `main.py` 최상단에 `import torch`를 강제 배치하여 그래픽 자원 충돌 우회.
+2. **의존성 지옥(Dependency Hell) 탈출을 위한 가상환경 격리:** PC 내 글로벌 환경에 설치된 기존 TensorFlow, Qiskit 등의 레거시 라이브러리와 최신 PyTorch/NumPy 2.x 간의 버전 충돌을 원천 차단하기 위해, 프로젝트 내부에 독립된 가상환경(`.venv`) 파이프라인을 구축하여 의존성 완벽 격리.
+3. **고정밀 딥러닝 기반 텍스트 판독 성능 확보:** 영문 코드 및 개발 특수 용어가 가짜 숫자로 깨져서 출력되던 Tesseract의 근본적인 한계를 탈출하여, 형태소 판별력이 높은 EasyOCR 딥러닝 모델 기반으로 실전 수준의 데이터 판독 신뢰도 확보.
+
+### Phase 8: 하이브리드 아키텍처 개편 및 전처리 캡슐화 (완료)
+프로그램이 특정 OCR 엔진에 종속되는 문제를 해결하고 결합도를 낮추기 위해, 객체 지향 및 관심사 분리(SoC) 원칙에 맞춘 대규모 아키텍처 리팩토링을 단행했습니다.
+
+1. **느슨한 결합(Loose Coupling)을 위한 스레드 책임 경감:** 제어 스레드(`ocr_engine.py`)가 이미지 전처리 단계까지 구체적으로 관여하던 레거시 구조를 전면 파괴. 큐에서 나온 날것의 이미지(`raw_image`)를 프로세서에 가공 없이 그대로 토스하도록 워크플로우를 단순화하여 단일 책임 원칙 준수.
+2. **엔진별 전처리 모듈 독립 및 내장화(Encapsulation):** 칼같은 흑백 이진화가 필요한 Tesseract용 전처리기와, 부드러운 그라데이션 윤곽선 보존이 필요한 EasyOCR용 전처리기를 `core/preprocessor/` 하위로 완전히 분리. 각 프로세서 클래스(`Processor`)가 내부 부품으로 전처리기를 스스로 품고 동작하도록 캡슐화 완성.
+3. **방어적 프로그래밍(Defensive Programming) 기반 예외 처리:** 상위 레이어의 급격한 구조적 변화나 이미지 입력 채널수(1채널 그레이스케일, 3채널 BGR, 4채널 BGRA 등)의 변동에 상관없이, 전처리 엔진 레이어에서 유연하게 채널을 판별하고 동작하도록 채널 체크 예외 방어막 구축.
+
+
 ## ⚙️ 제어판 상세 명세 (Dashboard Specification)
 
 | 카테고리 | 주요 기능 | 상세 항목 |
@@ -92,26 +117,35 @@ ScanLine/
 ```text
 [Screen] 
    ▼ (mss)
-[CaptureThread] -> (Pixel Data) -> [In-Memory Queue]
-                                         ▼
-                                   [OCR Thread] -> (String) -> [TXT File]
-                                         ▼
-                                   [Live Preview UI]
-
+[CaptureThread] ➔ (Pixel Data: BGRA Numpy) ➔ [In-Memory Queue]
+                                                    ▼
+                                            [OCR Thread (Workflow)]
+                                                    ▼ (Pass Raw Image)
+                                            [EasyOCR / Tesseract Processor]
+                                                    ▼ (Internal Preprocessing)
+                                            [Engine-Specific Preprocessor]
+                                                    ▼ (Extract Text)
+                                            [TextStitcher (Context Stitching)]
+                                                    ▼
+                                            [TXT File & Live Preview UI]
 ```
 
 ## 🚧 해결해야 할 기술적 과제 & 다음 단계 (Next Steps)
 
-1. **스마트 텍스트 병합 (Stitching):** 현재 FPS 속도로 인해 발생하는 텍스트 중복 저장 문제를 해결하기 위해, `difflib` 모듈 등을 활용해 이전 프레임과 현재 프레임의 겹치는 문맥을 파악하고 새로 등장한 글자만 덧붙이는 지능형 병합 알고리즘 구현.
-2. **이미지 고급 전처리 (Preprocessing):** 가장자리 노이즈(Edge Noise) 및 외계어 출력을 줄이기 위해, `OpenCV`를 활용한 이진화(Binarization) 및 노이즈 제거 필터 적용.
+1. **EasyOCR 문장 중복 방지 및 TextStitcher 알고리즘 최적화:** EasyOCR 엔진 특성상 하나의 문장을 여러 개의 바운딩 박스로 쪼개어 인식하여 중복 데이터가 쌓이는 현상이 발생함. 이를 해결하기 위해 `readtext(paragraph=True)` 옵션을 테스트하고, `TextStitcher`의 시퀀스 매칭 임계값(Threshold)을 정밀 조율하여 스크롤 누적 버그 완벽 해결.
+2. **엔진별 맞춤형 전처리 파이프라인 고도화:** 아키텍처 분리는 완료되었으므로, 스크롤 속도 변화에 따라 상하단 경계면에 생기는 글자 잔상 노이즈를 더 완벽히 차단할 수 있도록 `_clear_borders` 지움 마진(Margin) 알고리즘 고도화 및 EasyOCR 내부 대비(Contrast) 옵션 튜닝.
 
-## 🏃‍♂️ 실행 방법 (현재 Phase 5 기준)
+## 🏃‍♂️ 실행 방법 (가상환경 격리 권장)
 
-**⚠️ 주의:** 이 프로그램을 실행하기 위해서는 운영체제에 [Tesseract-OCR](https://github.com/UB-Mannheim/tesseract/wiki) (한국어 팩 포함)이 설치되어 있어야 합니다.
+윈도우 환경에서 타 라이브러리(TensorFlow, Qiskit 등)와의 NumPy 버전 충돌을 방지하고, PyQt5와 PyTorch 간의 1114 DLL 로드 버그를 피하기 위해 가상환경 환경 구축 및 임포트 순서 최적화가 완료되었습니다. tesseract 엔진으로 구동하기 위해서는 운영체제에 [Tesseract-OCR](https://github.com/UB-Mannheim/tesseract/wiki) (한국어 팩 포함)이 설치되어 있어야 합니다.
 
 ```bash
-# 1. 필수 라이브러리 설치
-pip install mss PyQt5 numpy opencv-python pytesseract
+# 1. 프로젝트 폴더 내 독립 가상환경 생성 및 활성화
+python -m venv .venv
+.\\.venv\\Scripts\\Activate.ps1
 
-# 2. 프로그램 실행
+# 2. 필수 라이브러리 및 최신 AI 패키지 설치
+pip install torch torchvision torchaudio easyocr PyQt5 opencv-python mss pytesseract
+
+# 3. 프로그램 실행 (main.py 내 최상단 임포트 규칙 자동 적용)
 python main.py
