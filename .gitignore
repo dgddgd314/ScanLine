@@ -1,12 +1,20 @@
-# Python 캐시 파일
+# Python cache
 __pycache__/
 *.py[cod]
 *$py.class
+.venv/
 
-# 캡처 결과물 폴더 (테스트 이미지, 텍스트 업로드 방지)
+# Local capture and output files
 scanline_captures/
 output.txt
+fallback_output.txt
 
-# 에디터 및 OS 시스템 파일 (선택 사항)
+# Build artifacts
+build/
+dist/
+release/
+*.zip
+
+# Editor and OS files
 .vscode/
 .DS_Store
